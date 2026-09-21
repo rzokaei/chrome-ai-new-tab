@@ -1,0 +1,26 @@
+# macOS and Windows metadata
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.idea/
+.vscode/
+*.swp
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies, test output, and packaged extensions
+node_modules/
+coverage/
+dist/
+*.crx
+*.zip
+
+# Local scratch files
+work/
+tmp/
