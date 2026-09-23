@@ -244,6 +244,42 @@
           <p class="secret-note">Keep this address private. It is stored only in Chrome and sent only to Google Calendar.</p>
         </div>
 
+        <div class="setting-group background-setting">
+          <div class="setting-title"><span class="background-setting-icon" aria-hidden="true"></span><strong>Background</strong></div>
+          <div id="background-options" class="background-options" role="radiogroup" aria-label="Background image">
+            <button class="background-option" type="button" data-background="none" role="radio" aria-checked="false">
+              <span class="background-preview none-preview"><span aria-hidden="true">No image</span></span>
+              <span>No image</span>
+              <span class="selected-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="background-option" type="button" data-background="aurora-night" role="radio" aria-checked="true">
+              <span class="background-preview aurora-preview"></span>
+              <span>Aurora Night</span>
+              <span class="selected-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="background-option" type="button" data-background="desert-dawn" role="radio" aria-checked="false">
+              <span class="background-preview desert-preview"></span>
+              <span>Desert Dawn</span>
+              <span class="selected-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="background-option" type="button" data-background="forest-mist" role="radio" aria-checked="false">
+              <span class="background-preview forest-preview"></span>
+              <span>Forest Mist</span>
+              <span class="selected-check" aria-hidden="true">✓</span>
+            </button>
+            <button id="upload-background" class="background-option custom-background-option" type="button" role="radio" aria-checked="false">
+              <span id="custom-background-preview" class="background-preview custom-preview"><span>+</span></span>
+              <span>My image</span>
+              <span class="selected-check" aria-hidden="true">✓</span>
+            </button>
+          </div>
+          <input id="background-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <div class="background-meta">
+            <span id="background-status">Aurora Night selected</span>
+            <button id="remove-custom-background" type="button" hidden>Remove my image</button>
+          </div>
+        </div>
+
         <div id="settings-error" class="settings-error" role="alert"></div>
         <div class="settings-actions">
           <span>Credentials stay in Chrome storage.</span>

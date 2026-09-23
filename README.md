@@ -20,6 +20,7 @@ If version 1 is already installed, replace the old folder with this one and clic
 - Use the square stop button to stop a response.
 - Use **+** to start a fresh conversation.
 - Add, edit, or remove up to eight website shortcuts below the prompt. Chrome supplies each site's favicon from its own favicon cache.
+- Choose Aurora Night, Desert Dawn, Forest Mist, no background image, or upload your own image. Aurora Night is the default.
 - The compact monthly calendar is visible immediately whenever a new tab opens.
 - Use its arrows to browse months, select a date to open its agenda, and add timed or all-day events.
 - To show Google Calendar events, open the gear, paste the calendar's **Secret address in iCal format**, then choose **Sync now** or **Save settings**.
@@ -38,6 +39,7 @@ The default models are `gpt-5-mini` and `gemini-2.5-flash`, and both can be chan
 - Conversation history lives only in the current tab and is cleared when the tab closes or you start a new chat.
 - Calendar events stay in Chrome's local extension storage until you delete them.
 - Website shortcuts stay in Chrome's local extension storage. Shortcut clicks open in the current tab.
+- A custom background is resized and compressed in the browser, then saved only in Chrome's local extension storage.
 - Your Google Calendar secret iCal address and a read-only event cache stay in Chrome's local extension storage. The address is sent only to `calendar.google.com` to refresh events. Treat it like a password and never share it.
 - Recent headlines are cached locally so the panel can populate quickly on the next new tab.
 - API usage is billed separately by OpenAI or Google; a ChatGPT or Gemini subscription does not automatically include API usage.

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Ask AI — New Tab",
-  "version": "8.0.0",
-  "description": "Chat with AI, open favorite sites, view Google Calendar events, and read live headlines from every new tab.",
+  "version": "9.0.0",
+  "description": "A customizable new tab with AI chat, website shortcuts, Google Calendar, and live headlines.",
   "permissions": ["storage", "favicon"],
   "host_permissions": [
     "https://api.openai.com/*",

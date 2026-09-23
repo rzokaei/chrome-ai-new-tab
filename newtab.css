@@ -13,13 +13,23 @@
 html, body { min-height: 100%; }
 
 body {
+  --background-image: url("backgrounds/aurora-night.png");
+  --background-overlay: linear-gradient(90deg,rgba(243,240,232,.50) 0%,rgba(243,240,232,.42) 56%,rgba(243,240,232,.24) 100%);
   margin: 0;
   color: var(--ink);
-  background:
-    radial-gradient(circle at 82% 14%, rgba(234, 91, 56, 0.13), transparent 25rem),
-    linear-gradient(135deg, var(--paper) 0%, #f7f4ed 50%, var(--paper-deep) 100%);
+  background-color: var(--paper-deep);
+  background-image: var(--background-overlay), var(--background-image);
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+body[data-background="aurora-night"] { --background-image: url("backgrounds/aurora-night.png"); }
+body[data-background="none"] { --background-image: none; --background-overlay: linear-gradient(135deg,var(--paper) 0%,var(--paper-deep) 100%); }
+body[data-background="desert-dawn"] { --background-image: url("backgrounds/desert-dawn.png"); --background-overlay: linear-gradient(90deg,rgba(248,243,234,.50),rgba(248,243,234,.40) 58%,rgba(248,243,234,.22)); }
+body[data-background="forest-mist"] { --background-image: url("backgrounds/forest-mist.png"); --background-overlay: linear-gradient(90deg,rgba(241,241,234,.52),rgba(241,241,234,.44) 56%,rgba(241,241,234,.26)); }
+body[data-background="custom"] { --background-image: var(--custom-background-image); --background-overlay: linear-gradient(90deg,rgba(243,240,232,.62),rgba(243,240,232,.52) 58%,rgba(243,240,232,.34)); }
 
 body::before {
   position: fixed;
@@ -41,7 +51,7 @@ button { color: inherit; }
   padding: 28px clamp(24px, 5vw, 76px) 24px;
 }
 
-.topbar, footer { display: flex; align-items: center; justify-content: space-between; }
+.topbar, footer { display: flex; align-items: center; justify-content: space-between; text-shadow: 0 1px 14px rgba(255,255,255,.75); }
 
 .brand {
   display: inline-flex;
@@ -272,7 +282,7 @@ footer { color: #8a877f; font-size: 10px; letter-spacing: .04em; text-transform:
 .delete-event:hover { color: var(--accent); }
 .no-events { margin: 20px 0 0; color: var(--muted); font-size: 11px; }
 
-.settings-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; border: 0; border-radius: 24px; padding: 0; background: transparent; color: var(--ink); box-shadow: 0 40px 100px rgba(0,0,0,.3); }
+.settings-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-x: hidden; overflow-y: auto; border: 0; border-radius: 24px; padding: 0; background: transparent; color: var(--ink); box-shadow: 0 40px 100px rgba(0,0,0,.3); }
 .settings-dialog::backdrop { background: rgba(10,10,10,.52); backdrop-filter: blur(7px); }
 .settings-card { padding: 26px; background: var(--paper); }
 .settings-header { display: flex; align-items: flex-start; justify-content: space-between; }
@@ -281,6 +291,26 @@ footer { color: #8a877f; font-size: 10px; letter-spacing: .04em; text-transform:
 .settings-intro { max-width: 580px; margin: 14px 0 22px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .google-calendar-setting { margin-top: 13px; }
+.background-setting { margin-top: 13px; }
+.background-setting-icon { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: linear-gradient(135deg,#22a6a1,#6b5fba 52%,#e88762); }
+.background-options { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 9px; }
+.background-option { position: relative; min-width: 0; border: 1px solid var(--line); border-radius: 11px; padding: 5px 5px 8px; background: transparent; cursor: pointer; }
+.background-option:hover { border-color: rgba(234,91,56,.55); }
+.background-option.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(234,91,56,.12); }
+.background-option > span:nth-child(2) { display: block; overflow: hidden; padding: 0 3px; font-size: 9px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.background-preview { display: block; width: 100%; aspect-ratio: 1.7; margin-bottom: 7px; border-radius: 7px; background-position: center; background-size: cover; }
+.none-preview { display: grid; place-items: center; border: 1px solid var(--line); background: linear-gradient(135deg,var(--paper),var(--paper-deep)); color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.aurora-preview { background-image: linear-gradient(rgba(5,12,23,.14),rgba(5,12,23,.14)),url("backgrounds/aurora-night.png"); }
+.desert-preview { background-image: url("backgrounds/desert-dawn.png"); }
+.forest-preview { background-image: url("backgrounds/forest-mist.png"); }
+.custom-preview { display: grid; place-items: center; border: 1px dashed var(--line); background-color: rgba(255,255,255,.12); color: var(--muted); font-size: 18px; }
+.custom-preview.has-image { border-style: solid; }
+.custom-preview.has-image > span { display: none; }
+.selected-check { position: absolute; top: 9px; right: 9px; display: none; width: 18px; height: 18px; place-items: center; border-radius: 50%; background: var(--accent); color: white; font-size: 10px; font-weight: 900; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.background-option.selected .selected-check { display: grid; }
+.background-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.background-meta button { border: 0; padding: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 9px; }
+.background-meta button:hover { color: var(--accent); }
 .google-calendar-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; background: linear-gradient(135deg,#4285f4 0 50%,#34a853 50%); box-shadow: inset -2px -2px 0 #fbbc04; }
 .read-only-badge { margin-left: auto; border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .setting-group { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); border-radius: 16px; padding: 17px; background: rgba(255,255,255,.22); }
@@ -358,6 +388,7 @@ footer { color: #8a877f; font-size: 10px; letter-spacing: .04em; text-transform:
   .settings-grid { grid-template-columns: 1fr; }
   .google-calendar-meta { align-items: flex-start; flex-direction: column; }
   .google-calendar-actions { width: 100%; flex-wrap: wrap; }
+  .background-options { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .settings-actions { align-items: stretch; flex-direction: column; }
   footer span:first-child, .footer-separator { display: none; }
   footer { justify-content: center; }
@@ -365,7 +396,11 @@ footer { color: #8a877f; font-size: 10px; letter-spacing: .04em; text-transform:
 
 @media (prefers-color-scheme: dark) {
   :root { --paper:#171716; --paper-deep:#0e0e0d; --ink:#f1eee6; --muted:#a7a39a; --line:rgba(241,238,230,.16); --card:rgba(38,38,36,.76); --shadow:0 24px 70px rgba(0,0,0,.38); }
-  body { background: radial-gradient(circle at 82% 14%,rgba(234,91,56,.16),transparent 26rem),linear-gradient(135deg,var(--paper),var(--paper-deep)); }
+  body { --background-overlay: linear-gradient(90deg,rgba(8,10,14,.50),rgba(8,10,14,.42) 56%,rgba(8,10,14,.24)); }
+  body[data-background="desert-dawn"] { --background-overlay: linear-gradient(90deg,rgba(20,15,13,.50),rgba(20,15,13,.40) 58%,rgba(20,15,13,.22)); }
+  body[data-background="forest-mist"] { --background-overlay: linear-gradient(90deg,rgba(7,16,15,.52),rgba(7,16,15,.44) 58%,rgba(7,16,15,.26)); }
+  body[data-background="custom"] { --background-overlay: linear-gradient(90deg,rgba(7,9,12,.62),rgba(7,9,12,.52) 58%,rgba(7,9,12,.34)); }
+  .topbar, footer { text-shadow: 0 1px 14px rgba(0,0,0,.8); }
   kbd, .icon-button { background: rgba(255,255,255,.06); }
   .icon-button:hover { background: rgba(255,255,255,.1); }
   .provider.active { background: rgba(255,255,255,.09); }

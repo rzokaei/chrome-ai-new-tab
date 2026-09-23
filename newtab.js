@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
   googleCalendarEvents: "googleCalendarEvents",
   googleCalendarSyncTime: "googleCalendarSyncTime",
   shortcuts: "websiteShortcuts",
+  background: "selectedBackground",
+  customBackground: "customBackgroundImage",
   newsCache: "newsCache",
   newsCacheTime: "newsCacheTime"
 };
@@ -16,6 +18,14 @@ const STORAGE_KEYS = {
 const NEWS_FEED_URL = "https://feeds.bbci.co.uk/news/rss.xml";
 const NEWS_REFRESH_MS = 15 * 60 * 1000;
 const GOOGLE_CALENDAR_REFRESH_MS = 15 * 60 * 1000;
+const DEFAULT_BACKGROUND = "aurora-night";
+const BACKGROUND_PRESETS = {
+  none: "No image",
+  "aurora-night": "Aurora Night",
+  "desert-dawn": "Desert Dawn",
+  "forest-mist": "Forest Mist",
+  custom: "My image"
+};
 
 const DEFAULTS = {
   provider: "openai",
@@ -84,6 +94,12 @@ const shortcutNameInput = document.querySelector("#shortcut-name");
 const shortcutUrlInput = document.querySelector("#shortcut-url");
 const shortcutError = document.querySelector("#shortcut-error");
 const deleteShortcutButton = document.querySelector("#delete-shortcut");
+const backgroundOptions = [...document.querySelectorAll(".background-option")];
+const backgroundFileInput = document.querySelector("#background-file");
+const uploadBackgroundButton = document.querySelector("#upload-background");
+const customBackgroundPreview = document.querySelector("#custom-background-preview");
+const backgroundStatus = document.querySelector("#background-status");
+const removeCustomBackgroundButton = document.querySelector("#remove-custom-background");
 
 let config = { ...DEFAULTS };
 let selectedProvider = DEFAULTS.provider;
@@ -102,6 +118,8 @@ let newsItems = [];
 let newsCacheTime = 0;
 let shortcuts = [];
 let editingShortcutId = null;
+let selectedBackground = DEFAULT_BACKGROUND;
+let customBackgroundImage = "";
 
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -116,6 +134,62 @@ function dateKey(date) {
 
 function sameDay(left, right) {
   return dateKey(left) === dateKey(right);
+}
+
+function applyBackground() {
+  const validSelection = BACKGROUND_PRESETS[selectedBackground]
+    && (selectedBackground !== "custom" || customBackgroundImage);
+  if (!validSelection) selectedBackground = DEFAULT_BACKGROUND;
+  document.body.dataset.background = selectedBackground;
+  if (customBackgroundImage) {
+    document.body.style.setProperty("--custom-background-image", `url("${customBackgroundImage}")`);
+    customBackgroundPreview.style.backgroundImage = `url("${customBackgroundImage}")`;
+    customBackgroundPreview.classList.add("has-image");
+  } else {
+    document.body.style.removeProperty("--custom-background-image");
+    customBackgroundPreview.style.removeProperty("background-image");
+    customBackgroundPreview.classList.remove("has-image");
+  }
+  backgroundOptions.forEach((button) => {
+    const id = button.dataset.background || "custom";
+    const active = id === selectedBackground;
+    button.classList.toggle("selected", active);
+    button.setAttribute("aria-checked", String(active));
+  });
+  backgroundStatus.textContent = `${BACKGROUND_PRESETS[selectedBackground]} selected`;
+  removeCustomBackgroundButton.hidden = !customBackgroundImage;
+}
+
+async function chooseBackground(id) {
+  if (!BACKGROUND_PRESETS[id] || (id === "custom" && !customBackgroundImage)) return;
+  selectedBackground = id;
+  applyBackground();
+  await storage.set({ [STORAGE_KEYS.background]: selectedBackground });
+}
+
+async function optimizeBackgroundImage(file) {
+  if (!file.type.startsWith("image/")) throw new Error("Choose a PNG, JPEG, WebP, or GIF image.");
+  if (file.size > 15 * 1024 * 1024) throw new Error("Choose an image smaller than 15 MB.");
+  const bitmap = await createImageBitmap(file);
+  const maxWidth = 1920;
+  const maxHeight = 1200;
+  const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d", { alpha: false });
+  context.fillStyle = "#101315";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  let quality = 0.86;
+  let dataUrl = canvas.toDataURL("image/jpeg", quality);
+  while (dataUrl.length > 3_500_000 && quality > 0.52) {
+    quality -= 0.08;
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+  }
+  if (dataUrl.length > 3_500_000) throw new Error("This image is too detailed. Try a smaller image.");
+  return dataUrl;
 }
 
 function normalizeShortcutUrl(value) {
@@ -981,6 +1055,53 @@ deleteShortcutButton.addEventListener("click", async () => {
   shortcutDialog.close();
 });
 
+backgroundOptions.filter((button) => button !== uploadBackgroundButton).forEach((button) => {
+  button.addEventListener("click", () => chooseBackground(button.dataset.background));
+});
+
+uploadBackgroundButton.addEventListener("click", () => {
+  if (customBackgroundImage && selectedBackground !== "custom") {
+    chooseBackground("custom");
+  } else {
+    backgroundFileInput.click();
+  }
+});
+
+backgroundFileInput.addEventListener("change", async () => {
+  const [file] = backgroundFileInput.files;
+  if (!file) return;
+  const previousImage = customBackgroundImage;
+  const previousSelection = selectedBackground;
+  backgroundStatus.textContent = "Preparing image…";
+  settingsError.textContent = "";
+  try {
+    customBackgroundImage = await optimizeBackgroundImage(file);
+    selectedBackground = "custom";
+    await storage.set({
+      [STORAGE_KEYS.background]: selectedBackground,
+      [STORAGE_KEYS.customBackground]: customBackgroundImage
+    });
+    applyBackground();
+  } catch (error) {
+    customBackgroundImage = previousImage;
+    selectedBackground = previousSelection;
+    settingsError.textContent = error.message || "The background image could not be saved.";
+    applyBackground();
+  } finally {
+    backgroundFileInput.value = "";
+  }
+});
+
+removeCustomBackgroundButton.addEventListener("click", async () => {
+  customBackgroundImage = "";
+  if (selectedBackground === "custom") selectedBackground = DEFAULT_BACKGROUND;
+  await storage.set({
+    [STORAGE_KEYS.background]: selectedBackground,
+    [STORAGE_KEYS.customBackground]: ""
+  });
+  applyBackground();
+});
+
 document.querySelectorAll(".reveal-button").forEach((button) => {
   button.addEventListener("click", () => {
     const input = document.querySelector(`#${button.dataset.target}`);
@@ -1051,6 +1172,13 @@ async function initialize() {
   shortcuts = Array.isArray(saved[STORAGE_KEYS.shortcuts])
     ? saved[STORAGE_KEYS.shortcuts].filter((shortcut) => shortcut?.id && shortcut?.url).slice(0, 8)
     : [];
+  selectedBackground = typeof saved[STORAGE_KEYS.background] === "string"
+    ? saved[STORAGE_KEYS.background]
+    : DEFAULT_BACKGROUND;
+  customBackgroundImage = typeof saved[STORAGE_KEYS.customBackground] === "string"
+    ? saved[STORAGE_KEYS.customBackground]
+    : "";
+  applyBackground();
   setProvider(config.provider, false);
   renderShortcuts();
   renderMiniCalendar();
