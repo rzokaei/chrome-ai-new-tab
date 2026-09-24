@@ -11,12 +11,21 @@ const STORAGE_KEYS = {
   shortcuts: "websiteShortcuts",
   background: "selectedBackground",
   customBackground: "customBackgroundImage",
+  newsFeeds: "newsFeeds",
   newsCache: "newsCache",
   newsCacheTime: "newsCacheTime"
 };
 
-const NEWS_FEED_URL = "https://feeds.bbci.co.uk/news/rss.xml";
 const NEWS_REFRESH_MS = 15 * 60 * 1000;
+const MAX_NEWS_FEEDS = 8;
+const MAX_NEWS_ITEMS = 6;
+const DEFAULT_NEWS_FEEDS = [
+  { id: "bbc-news", name: "BBC News", url: "https://feeds.bbci.co.uk/news/rss.xml", enabled: true },
+  { id: "npr-news", name: "NPR News", url: "https://feeds.npr.org/1001/rss.xml", enabled: true },
+  { id: "guardian-world", name: "The Guardian", url: "https://www.theguardian.com/world/rss", enabled: true },
+  { id: "al-jazeera", name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml", enabled: true }
+];
+const DEFAULT_FEED_ORIGINS = new Set(DEFAULT_NEWS_FEEDS.map((feed) => new URL(feed.url).origin));
 const GOOGLE_CALENDAR_REFRESH_MS = 15 * 60 * 1000;
 const DEFAULT_BACKGROUND = "aurora-night";
 const BACKGROUND_PRESETS = {
@@ -86,6 +95,12 @@ const newsList = document.querySelector("#news-list");
 const newsStatus = document.querySelector("#news-status");
 const newsUpdated = document.querySelector("#news-updated");
 const refreshNewsButton = document.querySelector("#refresh-news");
+const manageNewsFeedsButton = document.querySelector("#manage-news-feeds");
+const newsFeedSettings = document.querySelector("#news-feed-settings");
+const newsFeedRows = document.querySelector("#news-feed-rows");
+const addNewsFeedButton = document.querySelector("#add-news-feed");
+const newsFeedCount = document.querySelector("#news-feed-count");
+const newsFeedError = document.querySelector("#news-feed-error");
 const shortcutsGrid = document.querySelector("#shortcuts-grid");
 const shortcutDialog = document.querySelector("#shortcut-dialog");
 const shortcutForm = document.querySelector("#shortcut-form");
@@ -116,6 +131,7 @@ let visibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(),
 let miniVisibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 let newsItems = [];
 let newsCacheTime = 0;
+let newsFeeds = DEFAULT_NEWS_FEEDS.map((feed) => ({ ...feed }));
 let shortcuts = [];
 let editingShortcutId = null;
 let selectedBackground = DEFAULT_BACKGROUND;
@@ -591,14 +607,154 @@ function relativeTime(timestamp) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function normalizeNewsFeedUrl(value) {
+  let url;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new Error("Enter a valid RSS feed address.");
+  }
+  if (url.protocol !== "https:") throw new Error("RSS feed addresses must use HTTPS.");
+  return url.href;
+}
+
+function sanitizeStoredNewsFeeds(value) {
+  if (!Array.isArray(value)) return DEFAULT_NEWS_FEEDS.map((feed) => ({ ...feed }));
+  const seenIds = new Set();
+  const feeds = [];
+  value.slice(0, MAX_NEWS_FEEDS).forEach((candidate) => {
+    try {
+      const url = normalizeNewsFeedUrl(String(candidate?.url || ""));
+      let id = typeof candidate?.id === "string" && candidate.id ? candidate.id : crypto.randomUUID();
+      while (seenIds.has(id)) id = crypto.randomUUID();
+      seenIds.add(id);
+      const savedName = String(candidate?.name || "").trim();
+      feeds.push({
+        id,
+        name: (savedName || new URL(url).hostname).slice(0, 40),
+        url,
+        enabled: candidate?.enabled !== false
+      });
+    } catch {
+      // Ignore malformed saved feeds instead of preventing the new tab from loading.
+    }
+  });
+  return feeds;
+}
+
+function updateNewsFeedEditorCount() {
+  const count = newsFeedRows.children.length;
+  newsFeedCount.textContent = `${count} of ${MAX_NEWS_FEEDS}`;
+  addNewsFeedButton.disabled = count >= MAX_NEWS_FEEDS;
+}
+
+function createNewsFeedRow(feed) {
+  const row = document.createElement("div");
+  row.className = "news-feed-row";
+  row.dataset.feedId = feed.id;
+
+  const toggleLabel = document.createElement("label");
+  toggleLabel.className = "news-feed-toggle";
+  toggleLabel.title = "Enable or disable this feed";
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabled.className = "news-feed-enabled";
+  enabled.checked = feed.enabled;
+  enabled.setAttribute("aria-label", `Enable ${feed.name || "RSS feed"}`);
+  toggleLabel.append(enabled);
+
+  const name = document.createElement("input");
+  name.type = "text";
+  name.className = "news-feed-name";
+  name.maxLength = 40;
+  name.value = feed.name;
+  name.placeholder = "Source name";
+  name.setAttribute("aria-label", "RSS source name");
+
+  const url = document.createElement("input");
+  url.type = "url";
+  url.className = "news-feed-url";
+  url.maxLength = 2048;
+  url.value = feed.url;
+  url.placeholder = "https://example.com/feed.xml";
+  url.autocomplete = "off";
+  url.setAttribute("aria-label", `${feed.name || "RSS"} feed address`);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "remove-news-feed";
+  remove.textContent = "×";
+  remove.title = "Remove feed";
+  remove.setAttribute("aria-label", `Remove ${feed.name || "RSS feed"}`);
+  remove.addEventListener("click", () => {
+    row.remove();
+    newsFeedError.textContent = "";
+    updateNewsFeedEditorCount();
+  });
+
+  row.append(toggleLabel, name, url, remove);
+  return row;
+}
+
+function renderNewsFeedEditor() {
+  newsFeedRows.replaceChildren(...newsFeeds.map(createNewsFeedRow));
+  newsFeedError.textContent = "";
+  updateNewsFeedEditorCount();
+}
+
+function readNewsFeedEditor() {
+  const feeds = [...newsFeedRows.querySelectorAll(".news-feed-row")].map((row) => {
+    const url = normalizeNewsFeedUrl(row.querySelector(".news-feed-url").value);
+    const name = row.querySelector(".news-feed-name").value.trim() || new URL(url).hostname.replace(/^www\./, "");
+    return {
+      id: row.dataset.feedId || crypto.randomUUID(),
+      name: name.slice(0, 40),
+      url,
+      enabled: row.querySelector(".news-feed-enabled").checked
+    };
+  });
+  const duplicate = feeds.find((feed, index) => feeds.findIndex((candidate) => candidate.url === feed.url) !== index);
+  if (duplicate) throw new Error(`${duplicate.name} uses the same address as another feed.`);
+  return feeds;
+}
+
+function customFeedOriginPatterns(feeds) {
+  return [...new Set(feeds
+    .filter((feed) => feed.enabled)
+    .map((feed) => new URL(feed.url).origin)
+    .filter((origin) => !DEFAULT_FEED_ORIGINS.has(origin))
+    .map((origin) => `${origin}/*`))];
+}
+
+async function requestNewsFeedPermissions(feeds) {
+  const origins = customFeedOriginPatterns(feeds);
+  if (!origins.length || !globalThis.chrome?.permissions?.request) return true;
+  return chrome.permissions.request({ origins });
+}
+
+async function removeUnusedNewsFeedPermissions(previousFeeds, nextFeeds) {
+  if (!globalThis.chrome?.permissions?.remove) return;
+  const current = new Set(customFeedOriginPatterns(previousFeeds));
+  const next = new Set(customFeedOriginPatterns(nextFeeds));
+  const unused = [...current].filter((origin) => !next.has(origin));
+  if (unused.length) {
+    try {
+      await chrome.permissions.remove({ origins: unused });
+    } catch {
+      // Permission cleanup should not prevent the rest of the settings from saving.
+    }
+  }
+}
+
 function renderNewsUpdatedTime() {
   newsUpdated.textContent = newsCacheTime ? `Updated ${relativeTime(newsCacheTime).toLowerCase()}` : "";
 }
 
-function renderNews() {
+function renderNews(message = null) {
   newsList.replaceChildren();
-  if (newsItems.length) newsStatus.textContent = "";
-  newsItems.slice(0, 5).forEach((item) => {
+  if (message !== null) newsStatus.textContent = message;
+  else if (newsItems.length) newsStatus.textContent = "";
+  newsItems.slice(0, MAX_NEWS_ITEMS).forEach((item) => {
     const listItem = document.createElement("li");
     listItem.className = "news-item";
     const link = document.createElement("a");
@@ -611,50 +767,107 @@ function renderNews() {
     const time = document.createElement("time");
     time.className = "news-time";
     time.dateTime = item.publishedAt || "";
-    time.textContent = relativeTime(item.publishedAt);
+    time.textContent = [item.sourceName, relativeTime(item.publishedAt)].filter(Boolean).join(" · ");
     link.append(headline, time);
     listItem.append(link);
     newsList.append(listItem);
   });
+  const enabledCount = newsFeeds.filter((feed) => feed.enabled).length;
+  manageNewsFeedsButton.textContent = `${enabledCount} source${enabledCount === 1 ? "" : "s"} · Manage`;
   renderNewsUpdatedTime();
 }
 
-function parseNewsFeed(xmlText) {
+function childTextByLocalName(node, names) {
+  const child = [...node.children].find((candidate) => names.includes(candidate.localName));
+  return child?.textContent?.trim() || "";
+}
+
+function newsEntryLink(node) {
+  const links = [...node.children].filter((candidate) => candidate.localName === "link");
+  const linked = links.find((candidate) => !candidate.getAttribute("rel") || candidate.getAttribute("rel") === "alternate") || links[0];
+  return linked?.getAttribute("href")?.trim() || linked?.textContent?.trim() || "";
+}
+
+function parseNewsFeed(xmlText, feed) {
   const xml = new DOMParser().parseFromString(xmlText, "application/xml");
   if (xml.querySelector("parsererror")) throw new Error("The news feed returned invalid XML.");
-  return [...xml.querySelectorAll("channel > item")].slice(0, 5).map((item) => {
-    const title = item.querySelector("title")?.textContent?.trim();
-    const linkText = item.querySelector("link")?.textContent?.trim();
-    const publishedAt = item.querySelector("pubDate")?.textContent?.trim() || "";
+  const entries = [...xml.getElementsByTagName("item"), ...xml.getElementsByTagNameNS("*", "entry")];
+  return entries.slice(0, 12).map((item) => {
+    const title = childTextByLocalName(item, ["title"]);
+    const linkText = newsEntryLink(item);
+    const publishedAt = childTextByLocalName(item, ["pubDate", "published", "updated", "date"]);
     if (!title || !linkText) return null;
     const url = new URL(linkText);
     if (!["http:", "https:"].includes(url.protocol)) return null;
-    return { title, link: url.href, publishedAt };
+    return { title, link: url.href, publishedAt, sourceId: feed.id, sourceName: feed.name };
   }).filter(Boolean);
+}
+
+function newsItemTimestamp(item) {
+  const timestamp = new Date(item.publishedAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function curateNewsItems(feedResults) {
+  const selected = [];
+  const seen = new Set();
+  feedResults.forEach(({ items }) => {
+    const first = [...items].sort((left, right) => newsItemTimestamp(right) - newsItemTimestamp(left))[0];
+    if (first && !seen.has(first.link)) {
+      seen.add(first.link);
+      selected.push(first);
+    }
+  });
+  const remaining = feedResults.flatMap(({ items }) => items)
+    .sort((left, right) => newsItemTimestamp(right) - newsItemTimestamp(left));
+  for (const item of remaining) {
+    if (selected.length >= MAX_NEWS_ITEMS) break;
+    if (seen.has(item.link)) continue;
+    seen.add(item.link);
+    selected.push(item);
+  }
+  return selected.sort((left, right) => newsItemTimestamp(right) - newsItemTimestamp(left));
 }
 
 async function fetchNews(force = false) {
   if (!force && newsItems.length && Date.now() - newsCacheTime < NEWS_REFRESH_MS) return;
+  const enabledFeeds = newsFeeds.filter((feed) => feed.enabled);
+  if (!enabledFeeds.length) {
+    newsItems = [];
+    newsCacheTime = 0;
+    renderNews(newsFeeds.length ? "All feeds are disabled" : "Add an RSS feed in settings");
+    await storage.set({ [STORAGE_KEYS.newsCache]: [], [STORAGE_KEYS.newsCacheTime]: 0 });
+    return;
+  }
   refreshNewsButton.classList.add("loading");
   refreshNewsButton.disabled = true;
-  if (!newsItems.length) newsStatus.textContent = "Loading headlines…";
+  if (!newsItems.length) newsStatus.textContent = `Loading ${enabledFeeds.length} source${enabledFeeds.length === 1 ? "" : "s"}…`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(NEWS_FEED_URL, { cache: "no-store", signal: controller.signal });
-    if (!response.ok) throw new Error(`News request failed (${response.status}).`);
-    const items = parseNewsFeed(await response.text());
-    if (!items.length) throw new Error("No headlines were found in the feed.");
-    newsItems = items;
+    const results = await Promise.all(enabledFeeds.map(async (feed) => {
+      try {
+        const response = await fetch(feed.url, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error(`Request failed (${response.status}).`);
+        const items = parseNewsFeed(await response.text(), feed);
+        if (!items.length) throw new Error("No headlines were found.");
+        return { feed, items, failed: false };
+      } catch (error) {
+        return { feed, items: [], failed: true, error };
+      }
+    }));
+    const successful = results.filter((result) => !result.failed);
+    if (!successful.length) throw new Error("No news feeds were available.");
+    newsItems = curateNewsItems(successful);
     newsCacheTime = Date.now();
-    newsStatus.textContent = "";
-    renderNews();
+    const failedCount = results.length - successful.length;
+    renderNews(failedCount ? `${failedCount} feed${failedCount === 1 ? "" : "s"} unavailable` : "");
     await storage.set({
       [STORAGE_KEYS.newsCache]: newsItems,
       [STORAGE_KEYS.newsCacheTime]: newsCacheTime
     });
   } catch (error) {
-    newsStatus.textContent = newsItems.length ? "Showing cached headlines" : "Headlines unavailable";
+    renderNews(newsItems.length ? "Showing cached headlines" : "Headlines unavailable");
   } finally {
     clearTimeout(timeout);
     refreshNewsButton.classList.remove("loading");
@@ -858,6 +1071,7 @@ function openSettings(message = "") {
   geminiModelInput.value = config.geminiModel;
   googleCalendarUrlInput.value = googleCalendarUrl;
   renderGoogleCalendarStatus();
+  renderNewsFeedEditor();
   settingsError.textContent = message;
   if (!settingsDialog.open) settingsDialog.showModal();
 }
@@ -958,6 +1172,22 @@ document.querySelector("#mini-next-month").addEventListener("click", () => {
   renderMiniCalendar();
 });
 refreshNewsButton.addEventListener("click", () => fetchNews(true));
+manageNewsFeedsButton.addEventListener("click", () => {
+  openSettings();
+  requestAnimationFrame(() => newsFeedSettings.scrollIntoView({ block: "center" }));
+});
+addNewsFeedButton.addEventListener("click", () => {
+  if (newsFeedRows.children.length >= MAX_NEWS_FEEDS) return;
+  newsFeedRows.append(createNewsFeedRow({
+    id: crypto.randomUUID(),
+    name: "",
+    url: "",
+    enabled: true
+  }));
+  newsFeedError.textContent = "";
+  updateNewsFeedEditorCount();
+  newsFeedRows.lastElementChild.querySelector(".news-feed-name").focus();
+});
 syncGoogleCalendarButton.addEventListener("click", async () => {
   settingsError.textContent = "";
   try {
@@ -1114,10 +1344,19 @@ document.querySelectorAll(".reveal-button").forEach((button) => {
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   let nextGoogleCalendarUrl;
+  let nextNewsFeeds;
   try {
     nextGoogleCalendarUrl = normalizeGoogleCalendarUrl(googleCalendarUrlInput.value);
   } catch (error) {
     settingsError.textContent = error.message;
+    return;
+  }
+  try {
+    nextNewsFeeds = readNewsFeedEditor();
+    const permissionGranted = await requestNewsFeedPermissions(nextNewsFeeds);
+    if (!permissionGranted) throw new Error("Chrome access is required to load the new RSS feed.");
+  } catch (error) {
+    newsFeedError.textContent = error.message;
     return;
   }
   const nextConfig = {
@@ -1126,15 +1365,29 @@ settingsForm.addEventListener("submit", async (event) => {
     openaiModel: openaiModelInput.value.trim() || DEFAULTS.openaiModel,
     geminiModel: geminiModelInput.value.trim() || DEFAULTS.geminiModel
   };
+  const previousNewsFeeds = newsFeeds;
+  const newsFeedsChanged = JSON.stringify(previousNewsFeeds) !== JSON.stringify(nextNewsFeeds);
   config = { ...config, ...nextConfig };
+  newsFeeds = nextNewsFeeds;
   await storage.set({
     [STORAGE_KEYS.openaiKey]: config.openaiKey,
     [STORAGE_KEYS.geminiKey]: config.geminiKey,
     [STORAGE_KEYS.openaiModel]: config.openaiModel,
     [STORAGE_KEYS.geminiModel]: config.geminiModel,
-    [STORAGE_KEYS.googleCalendarUrl]: nextGoogleCalendarUrl
+    [STORAGE_KEYS.googleCalendarUrl]: nextGoogleCalendarUrl,
+    [STORAGE_KEYS.newsFeeds]: newsFeeds,
+    ...(newsFeedsChanged ? {
+      [STORAGE_KEYS.newsCache]: [],
+      [STORAGE_KEYS.newsCacheTime]: 0
+    } : {})
   });
+  if (newsFeedsChanged) {
+    newsItems = [];
+    newsCacheTime = 0;
+    await removeUnusedNewsFeedPermissions(previousNewsFeeds, newsFeeds);
+  }
   settingsError.textContent = "";
+  newsFeedError.textContent = "";
   setProvider(selectedProvider, false);
   if (!nextGoogleCalendarUrl && googleCalendarUrl) {
     await disconnectGoogleCalendar();
@@ -1147,6 +1400,7 @@ settingsForm.addEventListener("submit", async (event) => {
     }
   }
   settingsDialog.close();
+  if (newsFeedsChanged) fetchNews(true);
   promptInput.focus();
 });
 
@@ -1167,8 +1421,19 @@ async function initialize() {
     ? saved[STORAGE_KEYS.googleCalendarEvents]
     : {};
   googleCalendarSyncTime = Number(saved[STORAGE_KEYS.googleCalendarSyncTime]) || 0;
+  const hasSavedNewsFeeds = Array.isArray(saved[STORAGE_KEYS.newsFeeds]);
+  newsFeeds = sanitizeStoredNewsFeeds(saved[STORAGE_KEYS.newsFeeds]);
   newsItems = Array.isArray(saved[STORAGE_KEYS.newsCache]) ? saved[STORAGE_KEYS.newsCache] : [];
   newsCacheTime = Number(saved[STORAGE_KEYS.newsCacheTime]) || 0;
+  if (!hasSavedNewsFeeds || newsItems.some((item) => !item.sourceName)) {
+    newsItems = [];
+    newsCacheTime = 0;
+    await storage.set({
+      [STORAGE_KEYS.newsFeeds]: newsFeeds,
+      [STORAGE_KEYS.newsCache]: [],
+      [STORAGE_KEYS.newsCacheTime]: 0
+    });
+  }
   shortcuts = Array.isArray(saved[STORAGE_KEYS.shortcuts])
     ? saved[STORAGE_KEYS.shortcuts].filter((shortcut) => shortcut?.id && shortcut?.url).slice(0, 8)
     : [];

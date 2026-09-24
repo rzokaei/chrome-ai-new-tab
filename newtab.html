@@ -69,7 +69,7 @@
             <div id="news-status" class="news-status" role="status" aria-live="polite">Loading headlines…</div>
             <ol id="news-list" class="news-list"></ol>
             <div class="news-footer">
-              <a href="https://www.bbc.com/news" target="_blank" rel="noreferrer">From BBC News ↗</a>
+              <button id="manage-news-feeds" type="button">4 sources · Manage</button>
               <time id="news-updated"></time>
             </div>
           </section>
@@ -242,6 +242,17 @@
             </div>
           </div>
           <p class="secret-note">Keep this address private. It is stored only in Chrome and sent only to Google Calendar.</p>
+        </div>
+
+        <div id="news-feed-settings" class="setting-group news-feed-setting">
+          <div class="setting-title"><span class="news-setting-icon" aria-hidden="true"></span><strong>News feeds</strong><span class="read-only-badge">Up to 8</span></div>
+          <p class="setting-note">Enable, disable, rename, or replace any RSS feed. Chrome may ask for access when you add a new website.</p>
+          <div id="news-feed-rows" class="news-feed-rows"></div>
+          <div class="news-feed-actions">
+            <button id="add-news-feed" type="button">+ Add RSS feed</button>
+            <span id="news-feed-count"></span>
+          </div>
+          <div id="news-feed-error" class="news-feed-error" role="alert"></div>
         </div>
 
         <div class="setting-group background-setting">
